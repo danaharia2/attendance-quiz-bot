@@ -1,8 +1,7 @@
-# main.py (fixed for Fly.io)
+# main.py (Railway version - kembali ke polling)
 import logging
 import traceback
 import os
-import asyncio
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from datetime import time
 from telegram import BotCommand, BotCommandScopeAllPrivateChats, BotCommandScopeAllGroupChats
@@ -75,29 +74,9 @@ async def setup_bot_commands(application):
     except Exception as e:
         logger.error(f"❌ Error setting bot commands: {e}")
 
-async def setup_webhook(application):
-    """Setup webhook untuk Fly.io"""
-    try:
-        # Dapatkan URL dari environment variable Fly.io
-        fly_app_name = os.environ.get('FLY_APP_NAME', 'telegram-bot-danaharia2')
-        webhook_url = f"https://{fly_app_name}.fly.dev"
-        
-        # Set webhook
-        await application.bot.set_webhook(f"{webhook_url}/webhook")
-        logger.info(f"✅ Webhook set to: {webhook_url}/webhook")
-    except Exception as e:
-        logger.error(f"❌ Error setting webhook: {e}")
-
 def main():
-    """Main function - fixed for Fly.io webhook"""
+    """Main function - Railway version (polling)"""
     try:
-        # Start health check server (untuk Fly.io)
-        try:
-            from health_check import health_thread
-            logger.info("✅ Health check server started")
-        except ImportError:
-            logger.warning("⚠️ Health check module not found")
-        
         # Import config
         from config import validate_config, BOT_TOKEN
         if not validate_config():
@@ -121,7 +100,7 @@ def main():
         # Setup bot commands menu
         application.post_init = setup_bot_commands
         
-        # Import handlers (sama seperti sebelumnya)
+        # Import handlers
         try:
             from fiturBot.handlers import (
                 start, status, test_connection, get_my_info, register, absen, test_classroom, get_all_member_ids, get_simple_member_ids,
@@ -232,20 +211,10 @@ def main():
             except Exception as e:
                 logger.error(f"❌ Error setting up scheduled tasks: {e}")
         
-        # Setup webhook dan start server (UNTUK FLY.IO)
-        application.post_init = setup_webhook
-
-        port = int(os.environ.get('PORT', 8080))
-        logger.info(f"🤖 Starting webhook server on port {port}")
-
-        # Start webhook (untuk Fly.io)
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=port,
-            url_path="/webhook",
-            webhook_url=None,
-            secret_token=None
-        )
+        logger.info("🚄 Starting bot on Railway (polling mode)...")
+        
+        # Start polling - Railway works best with polling
+        application.run_polling()
         
     except KeyboardInterrupt:
         logger.info("🛑 Bot stopped by user")

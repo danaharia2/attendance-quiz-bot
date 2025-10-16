@@ -1,0 +1,11 @@
+# railway.toml
+[build]
+  builder = "nixpacks"
+
+[deploy]
+  startCommand = "./start.sh"
+
+[environments]
+  [environments.production]
+    [environments.production.variables]
+      NODE_ENV = "production"
