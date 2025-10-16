@@ -51,3 +51,6 @@ tmp/
 
 # Telegram session
 *.session
+
+# Railway
+.railway/

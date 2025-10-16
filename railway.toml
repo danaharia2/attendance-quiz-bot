@@ -3,7 +3,7 @@
   builder = "nixpacks"
 
 [deploy]
-  startCommand = "./start.sh"
+  startCommand = "python main.py"
 
 [environments]
   [environments.production]
