@@ -1,0 +1,58 @@
+{
+  "questions": [
+    {
+      "question": "Sebutkan apa saja huruf jebakan (Kls Rusia)?\nTulis dengan keyboard rusia",
+      "correct_answers": ["С", "Р", "В", "Х", "У", "Е", "Н"],
+      "options": [],
+      "category": "bahasa_rusia",
+      "difficulty": "medium",
+      "created_by": null,
+      "created_at": null
+    },
+    {
+      "question": "Sebutkan 2 tanda bunyi dalam Bahasa Rusia?",
+      "correct_answers": ["Ъ", "Ь"],
+      "options": [],
+      "category": "bahasa_rusia",
+      "difficulty": "easy",
+      "created_by": null,
+      "created_at": null
+    },
+    {
+      "question": "Aktivitas orang gabut?",
+      "correct_answers": ["merusuh", "baca buku", "main game", "nonton", "tidur"],
+      "options": [],
+      "category": "umum",
+      "difficulty": "easy",
+      "created_by": null,
+      "created_at": null
+    },
+    {
+      "question": "Sebutkan kota besar di Indonesia?",
+      "correct_answers": ["jakarta", "surabaya", "bandung", "medan", "makassar", "semarang", "palembang", "depok"],
+      "options": [],
+      "category": "geografi",
+      "difficulty": "easy",
+      "created_by": null,
+      "created_at": null
+    },
+    {
+      "question": "Sebutkan warna pelangi?",
+      "correct_answers": ["merah", "jingga", "kuning", "hijau", "biru", "nila", "ungu"],
+      "options": [],
+      "category": "sains",
+      "difficulty": "easy",
+      "created_by": null,
+      "created_at": null
+    }
+  ],
+  "categories": {
+    "bahasa_rusia": "Bahasa Rusia",
+    "umum": "Umum",
+    "geografi": "Geografi",
+    "sains": "Sains",
+    "matematika": "Matematika",
+    "sejarah": "Sejarah",
+    "teknologi": "Teknologi"
+  }
+}
