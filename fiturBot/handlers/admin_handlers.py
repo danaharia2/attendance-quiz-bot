@@ -283,10 +283,24 @@ async def list_kehadiran(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception as e:
             logger.error(f"Gagal mengirim ke grup: {e}")
-            # Jika gagal ke grup, kirim ke admin saja
-            await update.message.reply_text(
-                f"❌ Gagal mengirim ke grup, berikut laporannya:\n\n{message}",
-                parse_mode='Markdown'
+
+            try:
+                await context.bot.send_message(
+                    chat_id=GROUP_CHAT_ID,
+                    text=message,
+                    parse_mode='Markdown'
+                )
+                await update.message.reply_text(
+                    f"✅ Laporan kehadiran berhasil dikirim ke grup (tanpa topic)!\n"
+                    f"• Tanggal: {tanggal_str}\n"
+                    f"• Total hadir: {len(siswa_hadir)} murid"
+                )
+            except Exception as e2:
+                logger.error(f"Gagal mengirim ke grup sama sekali: {e2}")
+                # Jika gagal ke grup, kirim ke admin saja
+                await update.message.reply_text(
+                    f"❌ Gagal mengirim ke grup, berikut laporannya:\n\n{message}",
+                    parse_mode='Markdown'
             )
 
     except Exception as e:
@@ -317,18 +331,73 @@ async def class_reminder_now(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"❌ Error: {e}")
 
 @admin_required
+@admin_required
 async def check_topics(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Cek informasi topik yang tersedia - ADMIN ONLY"""
     try:
         from config import TOPIC_NAMES, ANNOUNCEMENT_TOPIC_ID, ASSIGNMENT_TOPIC_ID, ATTENDANCE_TOPIC_ID
         
+        # Cek info grup
+        chat = await context.bot.get_chat(GROUP_CHAT_ID)
+        
         topic_info = (
             "📋 **INFORMASI TOPIK GRUP**\n\n"
+            f"• 💬 Nama Grup: {chat.title}\n"
+            f"• 🆔 Group ID: {GROUP_CHAT_ID}\n"
+            f"• 🏷️ Tipe: {chat.type}\n\n"
+            f"**Topik yang dikonfigurasi:**\n"
             f"• 🎯 PENGUMUMAN & INFO: Topic ID {ANNOUNCEMENT_TOPIC_ID} ({TOPIC_NAMES.get(ANNOUNCEMENT_TOPIC_ID, 'Unknown')})\n"
             f"• 📚 TUGAS: Topic ID {ASSIGNMENT_TOPIC_ID} ({TOPIC_NAMES.get(ASSIGNMENT_TOPIC_ID, 'Unknown')})\n"
             f"• ✅ ABSENSI: Topic ID {ATTENDANCE_TOPIC_ID} ({TOPIC_NAMES.get(ATTENDANCE_TOPIC_ID, 'Unknown')})\n\n"
-            "Bot akan mengirim pesan ke topik-topik tersebut sesuai dengan jenis pesannya."
         )
+        
+        # Test pengiriman ke setiap topik
+        test_results = "**Hasil Test Pengiriman:**\n"
+        
+        # Test announcement topic
+        try:
+            await context.bot.send_message(
+                chat_id=GROUP_CHAT_ID,
+                message_thread_id=ANNOUNCEMENT_TOPIC_ID,
+                text="🔔 Test pesan ke topik PENGUMUMAN"
+            )
+            test_results += "✅ Berhasil mengirim test ke topik PENGUMUMAN\n"
+        except Exception as e:
+            test_results += f"❌ Gagal mengirim ke topik PENGUMUMAN: {str(e)}\n"
+            
+        # Test assignment topic
+        try:
+            await context.bot.send_message(
+                chat_id=GROUP_CHAT_ID,
+                message_thread_id=ASSIGNMENT_TOPIC_ID,
+                text="🔔 Test pesan ke topik TUGAS"
+            )
+            test_results += "✅ Berhasil mengirim test ke topik TUGAS\n"
+        except Exception as e:
+            test_results += f"❌ Gagal mengirim ke topik TUGAS: {str(e)}\n"
+            
+        # Test attendance topic  
+        try:
+            await context.bot.send_message(
+                chat_id=GROUP_CHAT_ID,
+                message_thread_id=ATTENDANCE_TOPIC_ID,
+                text="🔔 Test pesan ke topik ABSENSI"
+            )
+            test_results += "✅ Berhasil mengirim test ke topik ABSENSI\n"
+        except Exception as e:
+            test_results += f"❌ Gagal mengirim ke topik ABSENSI: {str(e)}\n"
+        
+        topic_info += test_results
+        
+        # Test tanpa topic
+        try:
+            await context.bot.send_message(
+                chat_id=GROUP_CHAT_ID,
+                text="🔔 Test pesan tanpa topic"
+            )
+            topic_info += "\n✅ Berhasil mengirim test TANPA topic\n"
+        except Exception as e:
+            topic_info += f"\n❌ Gagal mengirim TANPA topic: {str(e)}\n"
         
         await update.message.reply_text(topic_info, parse_mode='Markdown')
         

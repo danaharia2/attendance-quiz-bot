@@ -158,6 +158,138 @@ Have a nice day & спасибо! 🌟"""
     except Exception as e:
         logger.error(f"Error sending class reminder: {e}")
 
+async def reminder_tugas_classroom(context: ContextTypes.DEFAULT_TYPE):
+    """Fungsi reminder tugas classroom yang dijalankan setiap hari"""
+    try:
+        bot = AttendanceBot()
+        
+        if bot.classroom_manager is None:
+            logger.warning("Google Classroom tidak tersedia, skip daily reminder")
+            return
+        
+        # Dapatkan tugas yang mendekati deadline
+        upcoming_assignments = bot.classroom_manager.get_upcoming_assignments()
+        
+        # Dapatkan tugas yang terlambat
+        overdue_assignments = bot.classroom_manager.get_overdue_assignments()
+        
+        current_time = datetime.now(WIB)
+        current_date = current_time.strftime("%d %B %Y")
+        current_hour = current_time.strftime("%H:%M WIB")
+        
+        message = f"📚 **REMINDER TUGAS HARIAN** 📚\n\n"
+        message += f"🕐 {current_date} - {current_hour}\n\n"
+        
+        if not upcoming_assignments and not overdue_assignments:
+            message += "✅ **Tidak ada tugas yang perlu diingatkan!**\n\n"
+            message += "Semua tugas sudah dikumpulkan atau tidak ada deadline mendatang. Tetap semangat belajar! 🎉"
+        else:
+            # Tugas yang terlambat
+            if overdue_assignments:
+                message += "🔴 **TUGAS TERLAMBAT**\n"
+                message += "Segera kumpulkan tugas-tugas berikut:\n\n"
+                
+                for assignment in overdue_assignments:
+                    message += f"📌 **{assignment['title']}**\n"
+                    message += f"   ⏰ Deadline: {assignment['due_date']}\n"
+                    message += f"   📝 Deskripsi: {assignment['description'][:100]}...\n\n"
+            
+            # Tugas yang mendekati deadline
+            if upcoming_assignments:
+                message += "🟡 **TUGAS MENDATANG**\n"
+                message += "Persiapkan tugas-tugas berikut:\n\n"
+                
+                for assignment in upcoming_assignments:
+                    message += f"📌 **{assignment['title']}**\n"
+                    message += f"   ⏰ Deadline: {assignment['due_date']}\n"
+                    message += f"   📝 Deskripsi: {assignment['description'][:100]}...\n\n"
+            
+            # Tips motivasi
+            motivation_tips = [
+                "💡 **Tips**: Kerjakan tugas sedikit demi sedikit setiap hari!",
+                "🎯 **Motivasi**: Jangan tunda sampai besok, mulailah hari ini!",
+                "🌟 **Pengingat**: Kumpulkan tepat waktu untuk nilai maksimal!",
+                "📖 **Saran**: Baca ulang instruksi tugas sebelum mengerjakan!"
+            ]
+            
+            import random
+            message += random.choice(motivation_tips)
+        
+        # Kirim reminder ke topik TUGAS
+        logger.info(f"🔔 Sending daily classroom reminder to topic: {ASSIGNMENT_TOPIC_ID}")
+        await send_to_assignment_topic(context, message)
+        logger.info("✅ Daily classroom reminder sent successfully")
+        
+    except Exception as e:
+        logger.error(f"Error in reminder_tugas_classroom: {e}")
+
+async def reminder_tugas_mingguan(context: ContextTypes.DEFAULT_TYPE):
+    """Fungsi reminder tugas mingguan (setiap Senin)"""
+    try:
+        bot = AttendanceBot()
+        
+        if bot.classroom_manager is None:
+            logger.warning("Google Classroom tidak tersedia, skip weekly reminder")
+            return
+        
+        # Dapatkan semua tugas aktif
+        all_assignments = bot.classroom_manager.get_all_active_assignments()
+        
+        current_time = datetime.now(WIB)
+        current_date = current_time.strftime("%d %B %Y")
+        
+        message = f"📋 **REKAP TUGAS MINGGU INI** 📋\n\n"
+        message += f"📅 {current_date}\n\n"
+        
+        if not all_assignments:
+            message += "🎉 **Tidak ada tugas untuk minggu ini!**\n\n"
+            message += "Gunakan waktu luang untuk review materi atau istirahat yang cukup! 😊"
+        else:
+            # Kelompokkan tugas berdasarkan status
+            upcoming = [a for a in all_assignments if a.get('status') == 'upcoming']
+            ongoing = [a for a in all_assignments if a.get('status') == 'ongoing']
+            overdue = [a for a in all_assignments if a.get('status') == 'overdue']
+            
+            total_tugas = len(all_assignments)
+            
+            message += f"📊 **Statistik Tugas:**\n"
+            message += f"   • Total: {total_tugas} tugas\n"
+            message += f"   • Mendatang: {len(upcoming)} tugas\n"
+            message += f"   • Berjalan: {len(ongoing)} tugas\n"
+            message += f"   • Terlambat: {len(overdue)} tugas\n\n"
+            
+            if overdue:
+                message += "🔴 **PRIORITAS TINGGI (Terlambat)**\n"
+                for assignment in overdue[:3]:  # Tampilkan max 3
+                    message += f"   ⚠️ {assignment['title']}\n"
+                message += "\n"
+            
+            if ongoing:
+                message += "🟡 **SEDANG BERJALAN**\n"
+                for assignment in ongoing[:3]:  # Tampilkan max 3
+                    message += f"   📌 {assignment['title']}\n"
+                    if assignment.get('due_date'):
+                        message += f"     ⏰ {assignment['due_date']}\n"
+                message += "\n"
+            
+            if upcoming:
+                message += "🟢 **AKAN DATANG**\n"
+                for assignment in upcoming[:3]:  # Tampilkan max 3
+                    message += f"   📌 {assignment['title']}\n"
+                    if assignment.get('due_date'):
+                        message += f"     ⏰ {assignment['due_date']}\n"
+            
+            message += "\n💪 **Semangat mengerjakan tugas! Jangan menunda-nunda!**"
+        
+        # Kirim reminder mingguan ke topik TUGAS
+        logger.info(f"🔔 Sending weekly classroom reminder to topic: {ASSIGNMENT_TOPIC_ID}")
+        await send_to_assignment_topic(context, message)
+        logger.info("✅ Weekly classroom reminder sent successfully")
+        
+    except Exception as e:
+        logger.error(f"Error in reminder_tugas_mingguan: {e}")
+
+
 async def periodic_check(context: ContextTypes.DEFAULT_TYPE):
     """Pengecekan periodik"""
     await auto_check_attendance(context)

@@ -10,6 +10,8 @@ from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler, Mes
 from config import ADMIN_IDS
 from datetime import datetime, timedelta, timezone
 
+logger = logging.getLogger(__name__)
+
 # ==================== SETUP IMPORT PATH ====================
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
@@ -46,7 +48,6 @@ except ImportError as e:
     print("⚠️ Using fallback Question and DummyQuizDB classes")
 
 WIB = timezone(timedelta(hours=7))
-logger = logging.getLogger(__name__)
 
 # ==================== GLOBAL VARIABLES ====================
 quiz_sessions = {}  # {chat_id: session_data}
@@ -147,7 +148,7 @@ def is_current_question_complete(chat_id):
     return len(session['current_question_answers']) == len(question.correct_answers)
 
 # ==================== QUIZ MANAGEMENT FUNCTIONS ====================
-async def quiz_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def quiz_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None):
     """Tampilkan statistik kuis"""
     try:
         total_questions = quiz_db.get_question_count()
@@ -164,10 +165,18 @@ async def quiz_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         stats_text += f"\n**Kategori Tersedia:** {len(categories)}\n"
         
-        await update.message.reply_text(stats_text, parse_mode='Markdown')
+        if query:
+            await query.message.reply_text(stats_text, parse_mode='Markdown')
+        elif update.message:
+            await update.message.reply_text(stats_text, parse_mode='Markdown')
+            
     except Exception as e:
         logger.error(f"Error in quiz_stats: {e}")
-        await update.message.reply_text("❌ Error mengambil statistik.")
+        error_text = "❌ Error mengambil statistik."
+        if query:
+            await query.message.reply_text(error_text)
+        elif update.message:
+            await update.message.reply_text(error_text)
 
 async def add_question_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler untuk menambah pertanyaan via command"""
@@ -204,8 +213,7 @@ async def add_question_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             question=question_text,
             correct_answers=correct_answers,
             category=category,
-            difficulty=difficulty,
-            created_by=user_id
+            difficulty=difficulty
         )
         
         if success:
@@ -295,7 +303,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(help_text)
 
-async def quiz_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def quiz_help(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None):
     """Handler untuk bantuan quiz"""
     help_text = (
         "🤖 **Bot Tebak-Tebakan - Bantuan**\n\n"
@@ -310,7 +318,12 @@ async def quiz_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/donasi - Dukung bot ini agar tetap aktif\n"
         "/lapor - Laporkan pertanyaan\n"
     )
-    await update.message.reply_text(help_text)
+    if query:
+        await query.message.reply_text(help_text)
+    elif update.message:
+        await update.message.reply_text(help_text)
+    else:
+        logger.error("Cannot determine message source in quiz_help")
 
 # ==================== CALLBACK HANDLER ====================
 async def quiz_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -327,17 +340,17 @@ async def quiz_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
     
     # Map callback data ke fungsi handler
     handler_map = {
-        "quiz_help": quiz_help,
+        "quiz_help": lambda u, c: quiz_help(u, c, query),
         "quiz_start": start_quiz,
         "quiz_surrender": surrender_quiz,
         "quiz_next": next_question,
-        "quiz_score": show_score,
-        "quiz_points": show_points,
-        "quiz_topscore": top_score,
-        "quiz_rules": quiz_rules,
-        "quiz_donate": quiz_donate,
-        "quiz_report": quiz_report,
-        "quiz_stats": quiz_stats,
+        "quiz_score": lambda u, c: show_score(u, c, query),
+        "quiz_points": lambda u, c: show_points(u, c, query),
+        "quiz_topscore": lambda u, c: top_score(u, c, query),
+        "quiz_rules": lambda u, c: quiz_rules(u, c, query),
+        "quiz_donate": lambda u, c: quiz_donate(u, c, query),
+        "quiz_report": lambda u, c: quiz_report(u, c, query),
+        "quiz_stats": lambda u, c: quiz_stats(u, c, query),
     }
     
     if callback_data in handler_map:
@@ -346,7 +359,7 @@ async def quiz_callback_handler(update: Update, context: ContextTypes.DEFAULT_TY
         await query.message.delete()  # Hapus pesan pemberitahuan
     elif callback_data == "quiz_create":
         if user_id in ADMIN_IDS:
-            await create_question_start(update, context)
+            await create_question_start(update, context, query)
         else:
             await query.message.reply_text("❌ Anda bukan admin!")
 
@@ -534,43 +547,90 @@ async def next_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in next_question: {e}")
         await update.message.reply_text("❌ Terjadi error saat pindah ke pertanyaan berikutnya.")
 
-async def show_score(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_score(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None):
     """Tampilkan skor saat ini"""
-    chat_id = update.effective_chat.id
-    
-    if chat_id in quiz_sessions:
-        session = quiz_sessions[chat_id]
-        current_score = len(session['current_question_answers'])
-        await update.message.reply_text(f"📊 Skor saat ini: {current_score}")
-    else:
-        await update.message.reply_text("ℹ️ Tidak ada game yang aktif.")
+    try:
+        if query:
+            chat_id = query.message.chat.id
+        elif update.message:
+            chat_id = update.message.chat.id
+        else:
+            logger.error("Cannot determine message source in show_score")
+            return
 
-async def show_points(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if chat_id in quiz_sessions:
+            session = quiz_sessions[chat_id]
+            current_score = len(session['current_question_answers'])
+            message_text = f"📊 Skor saat ini: {current_score}"
+        else:
+            message_text = "ℹ️ Tidak ada game yang aktif."
+
+        if query:
+            await query.message.reply_text(message_text)
+        elif update.message:
+            await update.message.reply_text(message_text)
+            
+    except Exception as e:
+        logger.error(f"Error in show_score: {e}")
+        error_text = "❌ Terjadi error saat mengambil skor."
+        if query:
+            await query.message.reply_text(error_text)
+        elif update.message:
+            await update.message.reply_text(error_text)
+
+async def show_points(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None):
     """Tampilkan poin user"""
-    user_id = update.effective_user.id
-    points = user_scores.get(user_id, 0)
-    await update.message.reply_text(f"⭐ Poin Anda: {points}")
+    try:
+        user_id = update.effective_user.id
+        points = user_scores.get(user_id, 0)
+        message_text = f"⭐ Poin Anda: {points}"
 
-async def top_score(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if query:
+            await query.message.reply_text(message_text)
+        elif update.message:
+            await update.message.reply_text(message_text)
+            
+    except Exception as e:
+        logger.error(f"Error in show_points: {e}")
+        error_text = "❌ Terjadi error saat mengambil poin."
+        if query:
+            await query.message.reply_text(error_text)
+        elif update.message:
+            await update.message.reply_text(error_text)
+
+async def top_score(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None):
     """Tampilkan leaderboard"""
-    if not user_scores:
-        await update.message.reply_text("📊 Belum ada skor yang tercatat.")
-        return
-    
-    top_users = sorted(user_scores.items(), key=lambda x: x[1], reverse=True)[:10]
-    leaderboard = "🏆 **Top Skor Global**\n\n"
-    
-    for i, (user_id, score) in enumerate(top_users, 1):
-        try:
-            user = await context.bot.get_chat(user_id)
-            username = user.username or user.first_name
-        except:
-            username = f"User_{user_id}"
-        leaderboard += f"{i}. {username}: {score} poin\n"
-    
-    await update.message.reply_text(leaderboard)
+    try:
+        if not user_scores:
+            message_text = "📊 Belum ada skor yang tercatat."
+        else:
+            top_users = sorted(user_scores.items(), key=lambda x: x[1], reverse=True)[:10]
+            leaderboard = "🏆 **Top Skor Global**\n\n"
+            
+            for i, (user_id, score) in enumerate(top_users, 1):
+                try:
+                    user = await context.bot.get_chat(user_id)
+                    username = user.username or user.first_name
+                except:
+                    username = f"User_{user_id}"
+                leaderboard += f"{i}. {username}: {score} poin\n"
+            
+            message_text = leaderboard
 
-async def quiz_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if query:
+            await query.message.reply_text(message_text)
+        elif update.message:
+            await update.message.reply_text(message_text)
+            
+    except Exception as e:
+        logger.error(f"Error in top_score: {e}")
+        error_text = "❌ Terjadi error saat mengambil leaderboard."
+        if query:
+            await query.message.reply_text(error_text)
+        elif update.message:
+            await update.message.reply_text(error_text)
+
+async def quiz_rules(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None):
     """Tampilkan aturan bermain"""
     rules_text = (
         "📚 **Aturan Bermain**\n\n"
@@ -584,22 +644,28 @@ async def quiz_rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "8. Bisa dimainkan di grup maupun private chat\n"
         "9. Semua anggota grup bisa menjawab pertanyaan yang sama\n"
     )
-    await update.message.reply_text(rules_text)
+    
+    if query:
+        await query.message.reply_text(rules_text)
+    elif update.message:
+        await update.message.reply_text(rules_text)
+    else:
+        logger.error("Cannot determine message source in quiz_rules")
 
-async def quiz_donate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def quiz_donate(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None):
     """Tampilkan informasi donasi"""
     donate_text = (
         "❤️ **Donasi**\n\n"
         "Dukung pengembangan bot ini agar tetap aktif!\n\n"
         "**Metode Pembayaran:**\n"
-        "• QRIS (Scan gambar di bawah)\n"
+        #"• QRIS (Scan gambar di bawah)\n"
         "• Dana: 083180442386\n"
         "• Seabank: 901960516142\n\n"
         "Terima kasih atas donasinya! ❤️"
     )
     
-    # Coba kirim gambar QRIS
     try:
+        # Coba kirim gambar QRIS
         qris_paths = ["assets/qris.jpg", "images/donation_qris.jpg", "qris.jpg", "donation_qris.jpg"]
         qris_file = None
         for path in qris_paths:
@@ -612,19 +678,34 @@ async def quiz_donate(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 continue
         
         if qris_file:
-            await context.bot.send_photo(
-                chat_id=update.effective_chat.id,
-                photo=qris_file,
-                caption=donate_text,
-                parse_mode='Markdown'
-            )
+            if query:
+                await context.bot.send_photo(
+                    chat_id=query.message.chat.id,
+                    photo=qris_file,
+                    caption=donate_text,
+                    parse_mode='Markdown'
+                )
+            elif update.message:
+                await context.bot.send_photo(
+                    chat_id=update.message.chat.id,
+                    photo=qris_file,
+                    caption=donate_text,
+                    parse_mode='Markdown'
+                )
         else:
-            await update.message.reply_text(donate_text)
+            if query:
+                await query.message.reply_text(donate_text)
+            elif update.message:
+                await update.message.reply_text(donate_text)
+                
     except Exception as e:
         logger.error(f"❌ Error sending QRIS image: {e}")
-        await update.message.reply_text(donate_text)
+        if query:
+            await query.message.reply_text(donate_text)
+        elif update.message:
+            await update.message.reply_text(donate_text)
 
-async def quiz_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def quiz_report(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None):
     """Handler untuk melaporkan pertanyaan"""
     report_text = (
         "⚠️ **Laporkan Pertanyaan**\n\n"
@@ -632,14 +713,23 @@ async def quiz_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "silahkan laporkan ke admin.\n\n"
         "Admin akan meninjau laporan Anda."
     )
-    await update.message.reply_text(report_text)
+    
+    if query:
+        await query.message.reply_text(report_text)
+    elif update.message:
+        await update.message.reply_text(report_text)
+    else:
+        logger.error("Cannot determine message source in quiz_report")
 
-async def create_question_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def create_question_start(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None):
     """Mulai proses pembuatan pertanyaan (admin only)"""
     user_id = update.effective_user.id
     
     if user_id not in ADMIN_IDS:
-        await update.message.reply_text("❌ Hanya admin yang bisa membuat pertanyaan!")
+        if query:
+            await query.message.reply_text("❌ Hanya admin yang bisa membuat pertanyaan!")
+        elif update.message:
+            await update.message.reply_text("❌ Hanya admin yang bisa membuat pertanyaan!")
         return
     
     instruction_text = (
@@ -648,11 +738,55 @@ async def create_question_start(update: Update, context: ContextTypes.DEFAULT_TY
         "`Pertanyaan|Jawaban1|Jawaban2|Jawaban3|...`\n\n"
         "**Contoh:**\n"
         "`Sebutkan kota di Indonesia?|Jakarta|Bandung|Surabaya|Medan|Makassar`\n\n"
-        "**Note:** Minimal 1 jawaban, maksimal tidak terbatas."
+        "**Note:** \n"
+        "• Minimal 1 jawaban\n"
+        "• Maksimal tidak terbatas\n"
+        "• Gunakan `|` sebagai pemisah\n\n"
+        "Ketik `batal` untuk membatalkan."
     )
     
-    await update.message.reply_text(instruction_text)
+    if query:
+        await query.message.reply_text(instruction_text, parse_mode='Markdown')
+    elif update.message:
+        await update.message.reply_text(instruction_text, parse_mode='Markdown')
+    
     context.user_data['waiting_for_question'] = True
+
+    # Schedule timeout
+    chat_id = query.message.chat.id if query else update.message.chat.id
+    context.user_data['question_timeout'] = context.job_queue.run_once(
+        question_timeout_handler, 
+        300,  # 5 menit timeout
+        data=chat_id
+    )
+
+async def question_timeout_handler(context: ContextTypes.DEFAULT_TYPE):
+    """Handler untuk timeout pembuatan pertanyaan"""
+    chat_id = context.job.data
+    if 'waiting_for_question' in context.user_data:
+        del context.user_data['waiting_for_question']
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="⏰ Waktu pembuatan pertanyaan habis. Silakan mulai lagi dengan /buat"
+        )
+
+async def cancel_question(update: Update, context: ContextTypes.DEFAULT_TYPE, query=None):
+    """Batalkan proses pembuatan pertanyaan"""
+    if context.user_data.get('waiting_for_question'):
+        # Cancel timeout job jika ada
+        if 'question_timeout' in context.user_data:
+            context.user_data['question_timeout'].schedule_removal()
+            del context.user_data['question_timeout']
+        
+        context.user_data['waiting_for_question'] = False
+        message_text = "❌ Pembuatan pertanyaan dibatalkan."
+    else:
+        message_text = "ℹ️ Tidak ada proses pembuatan pertanyaan yang aktif."
+
+    if query:
+        await query.message.reply_text(message_text)
+    elif update.message:
+        await update.message.reply_text(message_text)
 
 # ==================== MESSAGE HANDLER ====================
 async def handle_quiz_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -661,34 +795,86 @@ async def handle_quiz_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     chat_id = update.effective_chat.id
     text = update.message.text.strip()
     user_name = update.effective_user.first_name
+
+    # Di awal fungsi handle_quiz_message, tambahkan:
+    if text.lower() == 'batal' and context.user_data.get('waiting_for_question'):
+        await cancel_question(update, context)
+        return
     
     # Cek jika user sedang membuat pertanyaan (admin only)
     if context.user_data.get('waiting_for_question') and user_id in ADMIN_IDS:
         try:
-            parts = text.split('|')
-            if len(parts) >= 2:
-                question_text = parts[0].strip()
-                answers = [ans.strip() for ans in parts[1:]]
-                
-                # Add to database
-                success = quiz_db.add_question(
-                    question=question_text,
-                    correct_answers=answers,
-                    created_by=user_id
+            logger.info(f"Admin {user_id} creating question: {text}")
+            if '|' not in text:
+                await update.message.reply_text(
+                    "❌ Format salah! Gunakan pemisah `|`\n"
+                    "Contoh: `Sebutkan warna?|Merah|Hijau|Biru`",
+                    parse_mode='Markdown'
                 )
+                context.user_data['waiting_for_question'] = False
+                return
+            
+            parts = text.split('|')
+            if len(parts) < 2:
+                await update.message.reply_text(
+                    "❌ Format salah! Minimal 1 pertanyaan dan 1 jawaban\n"
+                    "Contoh: `Sebutkan warna?|Merah|Hijau|Biru`",
+                    parse_mode='Markdown'
+                )
+                context.user_data['waiting_for_question'] = False
+                return
                 
-                if success:
-                    initialize_questions()  # Reload questions
-                    await update.message.reply_text(f"✅ Pertanyaan berhasil ditambahkan dengan {len(answers)} jawaban benar!")
-                else:
-                    await update.message.reply_text("❌ Gagal menambah pertanyaan.")
+            question_text = parts[0].strip()
+            answers = [ans.strip() for ans in parts[1:] if ans.strip()]
+
+            logger.info(f"Parsed parts: {parts}")
+            logger.info(f"Question: {question_text}, Answers: {answers}")
+            
+            if not question_text:
+                await update.message.reply_text("❌ Pertanyaan tidak boleh kosong!")
+                context.user_data['waiting_for_question'] = False
+                return
+            
+            if not answers:
+                await update.message.reply_text("❌ Minimal harus ada 1 jawaban!")
+                context.user_data['waiting_for_question'] = False
+                return
+            
+            # Add to database
+            success = quiz_db.add_question(
+                question=question_text,
+                correct_answers=answers
+            )
+
+            if success:
+                initialize_questions()  # Reload questions
+                # Kirim notifikasi sukses dengan detail
+                success_msg = (
+                    "✅ **Pertanyaan Berhasil Dibuat!**\n\n"
+                    f"**Pertanyaan:** {question_text}\n"
+                    f"**Jumlah Jawaban:** {len(answers)}\n"
+                    f"**Jawaban:** {', '.join(answers)}\n\n"
+                    f"🕐 {format_time()}"
+                )
+                await update.message.reply_text(success_msg, parse_mode='Markdown')
+                
+                # Log untuk debugging
+                logger.info(f"Admin {user_id} created question: {question_text}")
+                
             else:
-                await update.message.reply_text("❌ Format salah! Minimal harus ada pertanyaan dan satu jawaban.")
+                await update.message.reply_text(
+                    "❌ Gagal menambah pertanyaan ke database. "
+                    "Cek logs untuk detail error."
+                )
         
         except Exception as e:
-            await update.message.reply_text(f"❌ Error: {str(e)}")
+            error_msg = f"❌ Error saat membuat pertanyaan: {str(e)}"
+            logger.error(f"Error in question creation: {e}")
+            await update.message.reply_text(error_msg)
         
-        context.user_data['waiting_for_question'] = False
+        finally:
+            # Reset status
+            context.user_data['waiting_for_question'] = False
         return
     
     # Cek jika chat sedang dalam sesi quiz

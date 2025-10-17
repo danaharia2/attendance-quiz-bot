@@ -6,7 +6,7 @@ from .admin_handlers import (
 from fiturBot.quiz_handler import (
     start_command, help_command, quiz, quiz_callback_handler, handle_quiz_message,
     quiz_help, start_quiz, surrender_quiz, next_question, 
-    show_score, show_points, top_score, quiz_rules, 
+    show_score, show_points, top_score, quiz_rules, cancel_question,
     quiz_donate, quiz_report, create_question_start, quiz_stats, add_question_handler
 )
 
@@ -19,7 +19,7 @@ __all__ = [
     'start_quiz', 'quiz_rules', 'quiz_donate',
     'next_question', 'quiz_report',
     'quiz_callback_handler',
-    'surrender_quiz',
+    'surrender_quiz', 'cancel_question'
     'show_score', 'show_points', 'top_score', 
     'handle_quiz_callback', 'add_question_handler',
     'handle_quiz_message', 'quiz_stats',

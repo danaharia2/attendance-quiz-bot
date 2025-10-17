@@ -93,5 +93,20 @@ class ClassroomManager:
         except Exception as e:
             logger.error(f"Error getting unsubmitted assignments: {e}")
             return {}
-        
-        
+
+    """    
+    def get_upcoming_assignments(self, days=3):
+        \"\"\"Mendapatkan tugas yang deadline-nya dalam beberapa hari ke depan\"\"\"
+        # Implementation: return assignments with due date within next 'days' days
+        pass
+
+    def get_overdue_assignments(self):
+        \"\"\"Mendapatkan tugas yang sudah melewati deadline\"\"\"
+        # Implementation: return assignments that are past due date
+        pass
+
+    def get_all_active_assignments(self):
+        \"\"\"Mendapatkan semua tugas yang masih aktif\"\"\"
+        # Implementation: return all active assignments
+        pass
+    """

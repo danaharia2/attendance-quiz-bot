@@ -156,8 +156,8 @@ def main():
             from fiturBot.quiz_handler import (
                 start_command, help_command, quiz, quiz_callback_handler, handle_quiz_message,
                 quiz_help, start_quiz, surrender_quiz, next_question, 
-                show_score, show_points, top_score, quiz_rules, 
-                quiz_donate, quiz_report, create_question_start, quiz_stats, add_question_handler
+                show_score, show_points, top_score, quiz_rules, add_question_handler,
+                quiz_donate, quiz_report, create_question_start, quiz_stats, cancel_question
             )
             
             # Add quiz command handlers
@@ -177,6 +177,7 @@ def main():
                  ("donasi", quiz_donate),
                  ("lapor", quiz_report),
                  ("buat", create_question_start),
+                 ("batal", cancel_question),
              ]
             
             for command, handler in quiz_commands:
@@ -198,15 +199,21 @@ def main():
         # Setup job queue for scheduled tasks
         if application.job_queue:
             try:
-                from auto_functions import periodic_check, send_classroom_reminder, send_class_reminder
-                
+                from auto_functions import (
+                    periodic_check, send_classroom_reminder, send_class_reminder, 
+                    reminder_tugas_classroom, reminder_tugas_mingguan
+                )
                 # Schedule tasks
                 application.job_queue.run_daily(periodic_check, time=time(hour=8, minute=0))
                 application.job_queue.run_daily(periodic_check, time=time(hour=18, minute=0))
                 application.job_queue.run_daily(send_classroom_reminder, time=time(hour=10, minute=0))
                 application.job_queue.run_daily(send_class_reminder, time=time(hour=18, minute=0), days=(6,))
                 application.job_queue.run_daily(send_class_reminder, time=time(hour=10, minute=0), days=(0,))
-                
+                application.job_queue.run_daily(reminder_tugas_classroom, time=time(hour=1, minute=0))  # 08:00 WIB
+        
+                # Reminder tugas mingguan setiap Senin jam 09:00 WIB
+                application.job_queue.run_daily(reminder_tugas_mingguan, time=time(hour=2, minute=0), days=(0,))  # Senin 09:00 WIB
+
                 logger.info("✅ Scheduled tasks configured")
             except Exception as e:
                 logger.error(f"❌ Error setting up scheduled tasks: {e}")
